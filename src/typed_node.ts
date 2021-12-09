@@ -1,3 +1,4 @@
+import exp from 'constants';
 import { Project, SourceFile, Node } from 'ts-morph'
 import * as ts from "typescript"
 
@@ -6,9 +7,9 @@ export class TypedNode {
     private _type: string | undefined;
     private _children: TypedNode[];
     private _parent: TypedNode | undefined;
-    private _variables: VariableType[]  = [];
+    private _variables: VariableSet<VariableType> = new VariableSet();
     private _functions: FunctionType[] = [];
-
+    private _firstLiteralToken: FirstLiteralToken | undefined;
 
     constructor(node: Node, children: TypedNode[], type?: string, parent?: TypedNode) {
         this._node = node;
@@ -45,10 +46,10 @@ export class TypedNode {
         this._parent = parent;
     }
 
-    public get variables(): VariableType[] {
+    public get variables(): VariableSet<VariableType> {
         return this._variables;
     }
-    public set variables(value: VariableType[]) {
+    public set variables(value: VariableSet<VariableType>) {
         this._variables = value;
     }
 
@@ -57,6 +58,13 @@ export class TypedNode {
     }
     public set functions(value: FunctionType[]) {
         this._functions = value;
+    }
+
+    public get firstLiteralToken(): FirstLiteralToken | undefined {
+        return this._firstLiteralToken;
+    }
+    public set firstLiteralToken(value: FirstLiteralToken | undefined) {
+        this._firstLiteralToken = value;
     }
 }
 
@@ -72,13 +80,62 @@ export class FunctionType {
     }
 }
 
+class FirstLiteralToken {
+    private _value: number;
+    private _name: string;
+
+    public get value(): number {
+        return this._value;
+    }
+    public set value(value: number) {
+        this._value = value;
+    }
+
+    public get name(): string {
+        return this._name;
+    }
+    public set name(value: string) {
+        this._name = value;
+    }
+
+    constructor(value: number, name: string) {
+        this._name = name;
+        this._value = value;
+    }
+}
+
+export class FirstLiteralTokenFactory{
+    private _count: number = 0;
+
+    public getCommaToken(value: number) :FirstLiteralToken{
+        return new FirstLiteralToken(value, "i" + this._count++)
+    }
+}
+
 export class VariableType {
-    variableName: string;
-    variableType: Type;
+    private _variableName: string;
+    private _variableType: Type;
+
+    public get variableType(): Type {
+        return this._variableType;
+    }
+    public set variableType(value: Type) {
+        this._variableType = value;
+    }
+    public get variableName(): string {
+        return this._variableName;
+    }
+    public set variableName(value: string) {
+        this._variableName = value;
+    }
 
     constructor(variableName: string, variableType: Type) {
-        this.variableName = variableName;
-        this.variableType = variableType;
+        this._variableName = variableName;
+        this._variableType = variableType;
+    }
+
+    equals(type: VariableType): boolean {
+        return type.variableName === this.variableName && type.variableType === this.variableType;
     }
 }
 
@@ -90,4 +147,25 @@ export enum Type {
     Array,
     Object,
     Expression
+}
+
+interface SetItem {
+    equals(other: SetItem): boolean;
+}
+
+export class VariableSet<T extends SetItem> extends Set<T> {
+    add(value: T): this {
+        let found = false;
+        this.forEach(item => {
+            if (value.equals(item)) {
+                found = true;
+            }
+        });
+
+        if (!found) {
+            super.add(value);
+        }
+
+        return this;
+    }
 }

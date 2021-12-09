@@ -65,7 +65,6 @@ function replaceNodeWithKind(selectFile: SourceFile, selectNode: Node, selectFil
     // } catch (ManipulationError) {
     //     console.error(ManipulationError)
     // }
-
 }
 
 function selectLiteral(nodes: Node[]): Node | void {
