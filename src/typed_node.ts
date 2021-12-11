@@ -9,7 +9,7 @@ export class TypedNode {
     private _parent: TypedNode | undefined;
     private _variables: VariableSet<VariableType> = new VariableSet();
     private _functions: FunctionType[] = [];
-    private _firstLiteralToken: FirstLiteralToken | undefined;
+    private _literals: LiteralSet<LiteralType> = new LiteralSet();
 
     constructor(node: Node, children: TypedNode[], type?: string, parent?: TypedNode) {
         this._node = node;
@@ -60,11 +60,11 @@ export class TypedNode {
         this._functions = value;
     }
 
-    public get firstLiteralToken(): FirstLiteralToken | undefined {
-        return this._firstLiteralToken;
+    public get literals(): LiteralSet<LiteralType> {
+        return this._literals;
     }
-    public set firstLiteralToken(value: FirstLiteralToken | undefined) {
-        this._firstLiteralToken = value;
+    public set literals(value: LiteralSet<LiteralType>) {
+        this._literals = value;
     }
 }
 
@@ -80,7 +80,7 @@ export class FunctionType {
     }
 }
 
-class FirstLiteralToken {
+class LiteralToken {
     private _value: number;
     private _name: string;
 
@@ -104,13 +104,14 @@ class FirstLiteralToken {
     }
 }
 
-export class FirstLiteralTokenFactory{
+export class LiteralNameFactory {
     private _count: number = 0;
 
-    public getCommaToken(value: number) :FirstLiteralToken{
-        return new FirstLiteralToken(value, "i" + this._count++)
+    public getLiteralName(): string {
+        return "i" + this._count++
     }
 }
+
 
 export class VariableType {
     private _variableName: string;
@@ -139,21 +140,90 @@ export class VariableType {
     }
 }
 
+export class LiteralType {
+    private _literalName: string;
+    private _literalType: Type;
+    private _literalValue: any;
+
+    public get literalType(): Type {
+        return this._literalType;
+    }
+    public set literalType(value: Type) {
+        this._literalType = value;
+    }
+    public get literalName(): string {
+        return this._literalName;
+    }
+    public set literalName(value: string) {
+        this._literalName = value;
+    }
+
+    constructor(literalType: Type, literalValue: any, literalNameFactory: LiteralNameFactory) {
+        this._literalName = literalNameFactory.getLiteralName()
+        this._literalType = literalType;
+        this.literalValue = literalValue;
+    }
+
+    public get literalValue(): any {
+        return this._literalValue;
+    }
+    public set literalValue(value: any) {
+        this._literalValue = value;
+    }
+
+    equals(type: LiteralType): boolean {
+        return type.literalName === this.literalName && type.literalType === this.literalType && type._literalValue === this._literalValue;
+    }
+}
+
 export enum Type {
-    Funtion,
     Number,
     Boolean,
     String,
     Array,
+    Any,
+    Function,
     Object,
-    Expression
+    Union,
+    Interface,
+    Undefined,
+    Enum
 }
 
-interface SetItem {
-    equals(other: SetItem): boolean;
+export function strToType(stype: string): Type {
+    for (let type in Type) {
+        if (typeof Type[type] === "string") {
+            if (Type[type].toLowerCase() === stype) {
+                return (<any>Type)[Type[type]];
+            }
+        }
+    }
+
+    return Type.Undefined;
 }
 
-export class VariableSet<T extends SetItem> extends Set<T> {
+interface Compareable {
+    equals(other: Compareable): boolean;
+}
+
+export class VariableSet<T extends Compareable> extends Set<T> {
+    add(value: T): this {
+        let found = false;
+        this.forEach(item => {
+            if (value.equals(item)) {
+                found = true;
+            }
+        });
+
+        if (!found) {
+            super.add(value);
+        }
+
+        return this;
+    }
+}
+
+export class LiteralSet<T extends Compareable> extends Set<T> {
     add(value: T): this {
         let found = false;
         this.forEach(item => {

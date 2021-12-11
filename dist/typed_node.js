@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.VariableSet = exports.Type = exports.VariableType = exports.FirstLiteralTokenFactory = exports.FunctionType = exports.TypedNode = void 0;
+exports.LiteralSet = exports.VariableSet = exports.strToType = exports.Type = exports.LiteralType = exports.VariableType = exports.LiteralNameFactory = exports.FunctionType = exports.TypedNode = void 0;
 class TypedNode {
     constructor(node, children, type, parent) {
         this._variables = new VariableSet();
         this._functions = [];
+        this._literals = new LiteralSet();
         this._node = node;
         this._type = type;
         this._children = children;
@@ -46,11 +47,11 @@ class TypedNode {
     set functions(value) {
         this._functions = value;
     }
-    get firstLiteralToken() {
-        return this._firstLiteralToken;
+    get literals() {
+        return this._literals;
     }
-    set firstLiteralToken(value) {
-        this._firstLiteralToken = value;
+    set literals(value) {
+        this._literals = value;
     }
 }
 exports.TypedNode = TypedNode;
@@ -62,7 +63,7 @@ class FunctionType {
     }
 }
 exports.FunctionType = FunctionType;
-class FirstLiteralToken {
+class LiteralToken {
     constructor(value, name) {
         this._name = name;
         this._value = value;
@@ -80,15 +81,15 @@ class FirstLiteralToken {
         this._name = value;
     }
 }
-class FirstLiteralTokenFactory {
+class LiteralNameFactory {
     constructor() {
         this._count = 0;
     }
-    getCommaToken(value) {
-        return new FirstLiteralToken(value, "i" + this._count++);
+    getLiteralName() {
+        return "i" + this._count++;
     }
 }
-exports.FirstLiteralTokenFactory = FirstLiteralTokenFactory;
+exports.LiteralNameFactory = LiteralNameFactory;
 class VariableType {
     constructor(variableName, variableType) {
         this._variableName = variableName;
@@ -111,16 +112,60 @@ class VariableType {
     }
 }
 exports.VariableType = VariableType;
+class LiteralType {
+    constructor(literalType, literalValue, literalNameFactory) {
+        this._literalName = literalNameFactory.getLiteralName();
+        this._literalType = literalType;
+        this.literalValue = literalValue;
+    }
+    get literalType() {
+        return this._literalType;
+    }
+    set literalType(value) {
+        this._literalType = value;
+    }
+    get literalName() {
+        return this._literalName;
+    }
+    set literalName(value) {
+        this._literalName = value;
+    }
+    get literalValue() {
+        return this._literalValue;
+    }
+    set literalValue(value) {
+        this._literalValue = value;
+    }
+    equals(type) {
+        return type.literalName === this.literalName && type.literalType === this.literalType && type._literalValue === this._literalValue;
+    }
+}
+exports.LiteralType = LiteralType;
 var Type;
 (function (Type) {
-    Type[Type["Funtion"] = 0] = "Funtion";
-    Type[Type["Number"] = 1] = "Number";
-    Type[Type["Boolean"] = 2] = "Boolean";
-    Type[Type["String"] = 3] = "String";
-    Type[Type["Array"] = 4] = "Array";
-    Type[Type["Object"] = 5] = "Object";
-    Type[Type["Expression"] = 6] = "Expression";
+    Type[Type["Number"] = 0] = "Number";
+    Type[Type["Boolean"] = 1] = "Boolean";
+    Type[Type["String"] = 2] = "String";
+    Type[Type["Array"] = 3] = "Array";
+    Type[Type["Any"] = 4] = "Any";
+    Type[Type["Function"] = 5] = "Function";
+    Type[Type["Object"] = 6] = "Object";
+    Type[Type["Union"] = 7] = "Union";
+    Type[Type["Interface"] = 8] = "Interface";
+    Type[Type["Undefined"] = 9] = "Undefined";
+    Type[Type["Enum"] = 10] = "Enum";
 })(Type = exports.Type || (exports.Type = {}));
+function strToType(stype) {
+    for (let type in Type) {
+        if (typeof Type[type] === "string") {
+            if (Type[type].toLowerCase() === stype) {
+                return Type[Type[type]];
+            }
+        }
+    }
+    return Type.Undefined;
+}
+exports.strToType = strToType;
 class VariableSet extends Set {
     add(value) {
         let found = false;
@@ -136,4 +181,19 @@ class VariableSet extends Set {
     }
 }
 exports.VariableSet = VariableSet;
+class LiteralSet extends Set {
+    add(value) {
+        let found = false;
+        this.forEach(item => {
+            if (value.equals(item)) {
+                found = true;
+            }
+        });
+        if (!found) {
+            super.add(value);
+        }
+        return this;
+    }
+}
+exports.LiteralSet = LiteralSet;
 //# sourceMappingURL=typed_node.js.map

@@ -139,4 +139,4 @@ for (let i = 0; i < 10; i++) {
 // // 将突变之后的代码写入文件中
 // fs.writeFileSync("D:/PyCharm 2021.2.1/code/result/mutate_file_" + i + ".ts", content)
 // }
-//# sourceMappingURL=AST.js.map
+//# sourceMappingURL=ast.js.map
