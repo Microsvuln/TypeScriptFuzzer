@@ -5,6 +5,7 @@ let ac = [3, 4];
 let ad = false;
 let ae = 1;
 let af = ac[aa];
+aa = 2;
 // var sourceCode = `
 // let cc:number[] = [7, 8, 9];
 // let ccc: number = cc[0];

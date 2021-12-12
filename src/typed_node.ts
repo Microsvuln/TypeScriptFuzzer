@@ -1,4 +1,4 @@
-import exp from 'constants';
+
 import { Project, SourceFile, Node } from 'ts-morph'
 import * as ts from "typescript"
 
@@ -65,6 +65,10 @@ export class TypedNode {
     }
     public set literals(value: LiteralSet<LiteralType>) {
         this._literals = value;
+    }
+
+    equals(node: TypedNode): boolean {
+        return node.node.getText() === this.node.getText();
     }
 }
 
@@ -172,7 +176,7 @@ export class LiteralType {
     }
 
     equals(type: LiteralType): boolean {
-        return type.literalName === this.literalName && type.literalType === this.literalType && type._literalValue === this._literalValue;
+        return type.literalType === this.literalType && type._literalValue === this._literalValue;
     }
 }
 
@@ -195,6 +199,9 @@ export function strToType(stype: string): Type {
         if (typeof Type[type] === "string") {
             if (Type[type].toLowerCase() === stype) {
                 return (<any>Type)[Type[type]];
+            } else if (stype?.search("Array") != -1) {
+                console.log(Type[type]);
+                return Type.Array
             }
         }
     }
@@ -204,6 +211,23 @@ export function strToType(stype: string): Type {
 
 interface Compareable {
     equals(other: Compareable): boolean;
+}
+
+export class TypedNodeSet<T extends Compareable> extends Set<T> {
+    add(value: T): this {
+        let found = false;
+        this.forEach(item => {
+            if (value.equals(item)) {
+                found = true;
+            }
+        });
+
+        if (!found) {
+            super.add(value);
+        }
+
+        return this;
+    }
 }
 
 export class VariableSet<T extends Compareable> extends Set<T> {

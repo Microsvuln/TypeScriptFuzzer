@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LiteralSet = exports.VariableSet = exports.strToType = exports.Type = exports.LiteralType = exports.VariableType = exports.LiteralNameFactory = exports.FunctionType = exports.TypedNode = void 0;
+exports.LiteralSet = exports.VariableSet = exports.TypedNodeSet = exports.strToType = exports.Type = exports.LiteralType = exports.VariableType = exports.LiteralNameFactory = exports.FunctionType = exports.TypedNode = void 0;
 class TypedNode {
     constructor(node, children, type, parent) {
         this._variables = new VariableSet();
@@ -52,6 +52,9 @@ class TypedNode {
     }
     set literals(value) {
         this._literals = value;
+    }
+    equals(node) {
+        return node.node.getText() === this.node.getText();
     }
 }
 exports.TypedNode = TypedNode;
@@ -137,7 +140,7 @@ class LiteralType {
         this._literalValue = value;
     }
     equals(type) {
-        return type.literalName === this.literalName && type.literalType === this.literalType && type._literalValue === this._literalValue;
+        return type.literalType === this.literalType && type._literalValue === this._literalValue;
     }
 }
 exports.LiteralType = LiteralType;
@@ -161,11 +164,30 @@ function strToType(stype) {
             if (Type[type].toLowerCase() === stype) {
                 return Type[Type[type]];
             }
+            else if ((stype === null || stype === void 0 ? void 0 : stype.search("Array")) != -1) {
+                console.log(Type[type]);
+                return Type.Array;
+            }
         }
     }
     return Type.Undefined;
 }
 exports.strToType = strToType;
+class TypedNodeSet extends Set {
+    add(value) {
+        let found = false;
+        this.forEach(item => {
+            if (value.equals(item)) {
+                found = true;
+            }
+        });
+        if (!found) {
+            super.add(value);
+        }
+        return this;
+    }
+}
+exports.TypedNodeSet = TypedNodeSet;
 class VariableSet extends Set {
     add(value) {
         let found = false;

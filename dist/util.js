@@ -76,12 +76,32 @@ function initVariables(node) {
         let type = checker.getTypeOfSymbolAtLocation(symbol, node.node);
         node.variables.add(new typed_node_1.VariableType(symbol.getName(), (0, typed_node_1.strToType)(type.getText())));
     }
-    // } else if (node.node.getKindName().search("Literal") != -1) {
-    //   let checker = node.node.getProject().getProgram().getTypeChecker()
-    //   console.log(checker);
-    // node.literals.add(new LiteralType(strToType(type.getText()), node.node.getText(), literalNameFactory))
-    // console.log(strToType(type.getText()), node.node.getText())
-    // }
+    else if (node.node.getKindName().search("Literal") != -1) {
+        switch (node.node.getKind()) {
+            case ts.SyntaxKind.NumericLiteral: {
+                node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Number, node.node.getText(), literalNameFactory));
+                break;
+            }
+            case ts.SyntaxKind.StringLiteral: {
+                node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.String, node.node.getText(), literalNameFactory));
+                break;
+            }
+            case ts.SyntaxKind.BigIntLiteral: {
+                node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Number, node.node.getText(), literalNameFactory));
+                break;
+            }
+            case ts.SyntaxKind.ArrayLiteralExpression: {
+                node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Array, node.node.getText(), literalNameFactory));
+                break;
+            }
+        }
+    }
+    else if (node.node.getKindName().search("FalseKeyword")) {
+        node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Boolean, false, literalNameFactory));
+    }
+    else if (node.node.getKindName().search("TrueKeyword")) {
+        node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Boolean, true, literalNameFactory));
+    }
     node.children.forEach(child => initVariables(child));
 }
 // 根据声明标识符和类型信息寻找到具体标识符，并加入到变量集合当中
@@ -108,10 +128,11 @@ function walkTypedNode(node, depth = 0) {
         walkTypedNode(child, depth);
     }
 }
-function walkAST(node) {
-    selectFileNodes.push(node.node);
-    for (let child of node.children) {
-        walkAST(child);
+function walkAST(node, depth = 0) {
+    console.log(new Array(depth + 1).join('----'), ts.SyntaxKind[node.getKind()], node.getStart(), node.getEnd(), node.getText());
+    depth++;
+    for (let child of node.getChildren()) {
+        walkAST(child, depth);
     }
 }
 function randomNum(min, max) {
@@ -133,6 +154,46 @@ function replaceNodeWithKind(selectFile, selectNode, selectFileIndex) {
         selectFile.replaceText([selectNode.getStart(), selectNode.getEnd()], replaceNode.getText());
     }
 }
+function replaceRange(s, start, end, substitute) {
+    return s.substring(0, start) + substitute + s.substring(end);
+}
+function replaceNode(node, allASTs, selectFileIndex) {
+    var _a;
+    let targets = new Set();
+    let declarationStmt = node.node.compilerNode;
+    let targetType = (0, typed_node_1.strToType)((_a = declarationStmt.type) === null || _a === void 0 ? void 0 : _a.getText());
+    let selectNode = declarationStmt.initializer;
+    // 在目标节点中添加 1.自己文件中类型匹配的变量或常量 2.其他文件中的常量
+    for (let i in allASTs) {
+        for (let literal of allASTs[i].literals) {
+            if (literal.literalType === targetType) {
+                targets.add(literal.literalValue);
+            }
+        }
+        if (Number(i) == selectFileIndex) {
+            walkByType(allASTs[i], targetType, targets);
+        }
+    }
+    console.log(declarationStmt.name.getText());
+    targets.delete(declarationStmt.name.getText());
+    targets.forEach(target => process.stdout.write(target + " "));
+    if (targets.size >= 1) {
+        let targetsArray = Array.from(targets);
+        let replaceText = targetsArray[randomNum(0, targetsArray.length)];
+        console.log("replace", selectNode.getText(), "to", replaceText);
+        // node.node.getSourceFile().replaceText([selectNode.getStart(), selectNode.getEnd()], replaceText);
+        // console.log(selectNode.getStart(), selectNode.getEnd());
+        console.log("\nAfter mutate: " + replaceRange(selectNode.getSourceFile().getFullText(), selectNode.getStart(), selectNode.getEnd(), replaceText));
+    }
+}
+function walkByType(node, type, targets) {
+    for (let variable of node.variables) {
+        if (variable.variableType === type) {
+            targets.add(variable.variableName);
+        }
+    }
+    node.children.forEach(child => walkByType(child, type, targets));
+}
 function selectLiteral(nodes) {
     let candidateNodes = [];
     for (let node in nodes) {
@@ -148,6 +209,19 @@ function selectLiteral(nodes) {
         return;
     }
 }
+function selectCandidateNodes(node, candidateNode) {
+    // 增加变量声明语句到候选中
+    if (node.node.getKind() == ts.SyntaxKind.VariableDeclaration) {
+        candidateNode.add(node);
+    }
+    node.children.forEach(child => selectCandidateNodes(child, candidateNode));
+    return candidateNode;
+}
+// 自底向上的将所有的literal汇总至根节点中
+function updateLiterals(node) {
+    node.children.forEach(child => updateLiterals(child));
+    node.literals.forEach(literal => { var _a; return (_a = node.parent) === null || _a === void 0 ? void 0 : _a.literals.add(literal); });
+}
 // 选择具有指定类型的节点
 function walkASTWithKind(node, kind, replaceNodes) {
     // console.log("find type " + node.getKindName());
@@ -160,13 +234,21 @@ function walkASTWithKind(node, kind, replaceNodes) {
 let allASTs = [];
 // 对于所有的文件构建TypedNode树
 for (let sourceFile of project.getSourceFiles()) {
+    // console.log(sourceFile.getBaseName());
+    // console.log(sourceFile.getText());
     if (sourceFile != undefined) {
+        // walkAST(sourceFile)
         let root;
         root = creatTypedNode(sourceFile);
         // walkTypedNode(root)
         setParentTypeNode(root);
         initVariables(root);
         updateVariables(root);
+        updateLiterals(root);
+        // console.log("variables value ---------------");
+        // root.variables.forEach(variable => console.log(variable.variableName, Type[variable.variableType]))
+        // console.log("literals value ---------------");
+        // root.literals.forEach(literal => console.log(Type[literal.literalType], literal.literalName, literal.literalValue))
         allASTs.push(root);
     }
 }
@@ -175,17 +257,18 @@ for (let i = 0; i < 10; i++) {
     //随机选择一个树
     let index = randomNum(0, allASTs.length - 1);
     let selectTree = allASTs[index];
-    var selectFileNodes = [];
     console.log("\nBefore mutate: \"" + selectTree.node.getText() + "\"");
-    walkAST(selectTree);
     //随机选择一个节点
-    let selectNode = selectLiteral(selectFileNodes);
+    let candidateNodes = new typed_node_1.TypedNodeSet();
+    selectCandidateNodes(selectTree, candidateNodes);
+    let candidateNodesArray = Array.from(candidateNodes);
+    let selectNode = candidateNodesArray[randomNum(0, candidateNodesArray.length - 1)];
     if (selectNode) {
-        console.log(selectNode.getKindName());
         // 替换选择的节点
-        replaceNodeWithKind(selectTree.node.getSourceFile(), selectNode, index);
+        // replaceNodeWithKind(selectTree.node.getSourceFile(), selectNode, index);
+        replaceNode(selectNode, allASTs, index);
         // 打印突变之后的代码
-        console.log("\nAfter mutate: \"" + selectTree.node.getText() + "\"");
+        // console.log("\nAfter mutate: \"" + selectTree.node.getText() + "\"");
         console.log("------------");
         // 将突变之后的代码写入文件中
         // fs.writeFileSync("D:/PyCharm 2021.2.1/code/result/mutate_file_" + i + ".ts", selectFile.getText())

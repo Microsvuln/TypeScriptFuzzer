@@ -4,6 +4,7 @@ let ac: number[] = [3, 4];
 let ad: boolean = false;
 let ae: any = 1;
 let af = ac[aa]
+aa = 2
 
 // var sourceCode = `
 // let cc:number[] = [7, 8, 9];
