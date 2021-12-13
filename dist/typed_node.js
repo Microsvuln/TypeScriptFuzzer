@@ -1,11 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LiteralSet = exports.VariableSet = exports.TypedNodeSet = exports.LiteralType = exports.VariableType = exports.LiteralNameFactory = exports.FunctionType = exports.TypedNode = void 0;
+exports.MySet = exports.LiteralType = exports.VariableType = exports.LiteralNameFactory = exports.FunctionType = exports.TypedNode = void 0;
 class TypedNode {
     constructor(node, children, type, parent) {
-        this._variables = new VariableSet();
-        this._functions = [];
-        this._literals = new LiteralSet();
+        this._variables = new MySet();
+        this._functions = new MySet();
+        this._literals = new MySet();
         this._node = node;
         this._type = type;
         this._children = children;
@@ -63,6 +63,26 @@ class FunctionType {
         this.functionName = functionName;
         this.returnType = returnType;
         this.paramsType = paramsType;
+    }
+    equals(func) {
+        let isParamsequal = true;
+        let flag = false;
+        for (let p of func.paramsType) {
+            for (let q of this.paramsType) {
+                if (p.variableType === q.variableType) {
+                    flag = true;
+                    break;
+                }
+            }
+            if (!flag) {
+                isParamsequal = false;
+                break;
+            }
+            else {
+                flag = false;
+            }
+        }
+        return isParamsequal && func.functionName === this.functionName && func.returnType === this.returnType;
     }
 }
 exports.FunctionType = FunctionType;
@@ -144,7 +164,7 @@ class LiteralType {
     }
 }
 exports.LiteralType = LiteralType;
-class TypedNodeSet extends Set {
+class MySet extends Set {
     add(value) {
         let found = false;
         this.forEach(item => {
@@ -158,35 +178,5 @@ class TypedNodeSet extends Set {
         return this;
     }
 }
-exports.TypedNodeSet = TypedNodeSet;
-class VariableSet extends Set {
-    add(value) {
-        let found = false;
-        this.forEach(item => {
-            if (value.equals(item)) {
-                found = true;
-            }
-        });
-        if (!found) {
-            super.add(value);
-        }
-        return this;
-    }
-}
-exports.VariableSet = VariableSet;
-class LiteralSet extends Set {
-    add(value) {
-        let found = false;
-        this.forEach(item => {
-            if (value.equals(item)) {
-                found = true;
-            }
-        });
-        if (!found) {
-            super.add(value);
-        }
-        return this;
-    }
-}
-exports.LiteralSet = LiteralSet;
+exports.MySet = MySet;
 //# sourceMappingURL=typed_node.js.map

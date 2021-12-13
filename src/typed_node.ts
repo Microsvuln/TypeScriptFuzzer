@@ -8,9 +8,9 @@ export class TypedNode {
     private _type: string | undefined;
     private _children: TypedNode[];
     private _parent: TypedNode | undefined;
-    private _variables: VariableSet<VariableType> = new VariableSet();
-    private _functions: FunctionType[] = [];
-    private _literals: LiteralSet<LiteralType> = new LiteralSet();
+    private _variables: MySet<VariableType> = new MySet();
+    private _functions: MySet<FunctionType> = new MySet();
+    private _literals: MySet<LiteralType> = new MySet();
 
     constructor(node: Node, children: TypedNode[], type?: string, parent?: TypedNode) {
         this._node = node;
@@ -47,24 +47,24 @@ export class TypedNode {
         this._parent = parent;
     }
 
-    public get variables(): VariableSet<VariableType> {
+    public get variables(): MySet<VariableType> {
         return this._variables;
     }
-    public set variables(value: VariableSet<VariableType>) {
+    public set variables(value: MySet<VariableType>) {
         this._variables = value;
     }
 
-    public get functions(): FunctionType[] {
+    public get functions(): MySet<FunctionType> {
         return this._functions;
     }
-    public set functions(value: FunctionType[]) {
+    public set functions(value: MySet<FunctionType>) {
         this._functions = value;
     }
 
-    public get literals(): LiteralSet<LiteralType> {
+    public get literals(): MySet<LiteralType> {
         return this._literals;
     }
-    public set literals(value: LiteralSet<LiteralType>) {
+    public set literals(value: MySet<LiteralType>) {
         this._literals = value;
     }
 
@@ -73,15 +73,39 @@ export class TypedNode {
     }
 }
 
+
 export class FunctionType {
     functionName: string;
-    returnType: ts.SyntaxKind;
+    returnType: string;
     paramsType: VariableType[];
 
-    constructor(functionName: string, returnType: ts.SyntaxKind, paramsType: VariableType[]) {
+    constructor(functionName: string, returnType: string, paramsType: VariableType[]) {
         this.functionName = functionName;
         this.returnType = returnType;
         this.paramsType = paramsType;
+    }
+
+    equals(func: FunctionType): boolean {
+        let isParamsequal = true;
+        let flag = false
+
+        for (let p of func.paramsType) {
+            for (let q of this.paramsType) {
+                if (p.variableType === q.variableType) {
+                    flag = true
+                    break
+                }
+            }
+
+            if (!flag) {
+                isParamsequal = false
+                break
+            } else {
+                flag = false
+            }
+        }
+
+        return isParamsequal && func.functionName === this.functionName && func.returnType === this.returnType;
     }
 }
 
@@ -226,41 +250,7 @@ interface Compareable {
     equals(other: Compareable): boolean;
 }
 
-export class TypedNodeSet<T extends Compareable> extends Set<T> {
-    add(value: T): this {
-        let found = false;
-        this.forEach(item => {
-            if (value.equals(item)) {
-                found = true;
-            }
-        });
-
-        if (!found) {
-            super.add(value);
-        }
-
-        return this;
-    }
-}
-
-export class VariableSet<T extends Compareable> extends Set<T> {
-    add(value: T): this {
-        let found = false;
-        this.forEach(item => {
-            if (value.equals(item)) {
-                found = true;
-            }
-        });
-
-        if (!found) {
-            super.add(value);
-        }
-
-        return this;
-    }
-}
-
-export class LiteralSet<T extends Compareable> extends Set<T> {
+export class MySet<T extends Compareable> extends Set<T> {
     add(value: T): this {
         let found = false;
         this.forEach(item => {

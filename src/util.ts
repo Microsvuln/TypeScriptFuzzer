@@ -1,10 +1,10 @@
 import * as morph from 'ts-morph'
 import * as ts from "typescript"
-import { TypedNode, FunctionType, VariableType, TypedNodeSet, VariableSet, LiteralNameFactory, LiteralType } from "./typed_node"
+import { TypedNode, FunctionType, VariableType, MySet, LiteralNameFactory, LiteralType } from "./typed_node"
 
 const project = new morph.Project();
 // 添加文件
-project.addSourceFilesAtPaths("D:/PyCharm 2021.2.1/code/test/*.ts")
+project.addSourceFilesAtPaths("D:/PyCharm 2021.2.1/code/test/function_test/*.ts")
 let literalNameFactory = new LiteralNameFactory()
 
 // 自底向上构建类型树
@@ -58,9 +58,9 @@ function updateVariables(node: TypedNode) {
   }
 }
 
-// 通过变量的声明语句为树添加初始的变量
+// 通过变量 函数的声明语句为树添加初始的变量
 function initVariables(node: TypedNode) {
-  if (node.node.getKind() == ts.SyntaxKind.VariableDeclaration) {
+  if (node.node.getKind() === ts.SyntaxKind.VariableDeclaration) {
     let checker = node.node.getProject().getProgram().getTypeChecker()
     let symbol = node.node.getSymbol()
     let type = checker.getTypeOfSymbolAtLocation(symbol, node.node)
@@ -69,10 +69,16 @@ function initVariables(node: TypedNode) {
     let checker = node.node.getProject().getProgram().getTypeChecker();
     let type: string = checker.getBaseTypeOfLiteralType(node.node.getType()).getText()
     node.literals.add(new LiteralType(type.toLowerCase(), node.node.getText(), literalNameFactory))
-  } else if (node.node.getKindName().search("FalseKeyword") != -1) {
+  } else if (node.node.getKind() === ts.SyntaxKind.FalseKeyword) {
     node.literals.add(new LiteralType("boolean", false, literalNameFactory))
-  } else if (node.node.getKindName().search("TrueKeyword") != -1) {
+  } else if (node.node.getKind() === ts.SyntaxKind.TrueKeyword) {
     node.literals.add(new LiteralType("boolean", true, literalNameFactory))
+  } else if (node.node.getKind() === ts.SyntaxKind.FunctionDeclaration) {
+    let functionNode = <morph.FunctionDeclaration>node.node;
+    let paramsType: VariableType[] = []
+    functionNode.getParameters().forEach(parameter => paramsType.push(new VariableType(parameter.getName(), parameter.getType().getText())))
+    let functionType = new FunctionType(functionNode.getName(), functionNode.getReturnType().getText(), paramsType)
+    node.functions.add(functionType)
   }
 
   node.children.forEach(child => initVariables(child))
@@ -128,19 +134,44 @@ function replaceRange(s: string, start: number, end: number, substitute: string)
   return s.substring(0, start) + substitute + s.substring(end);
 }
 
-function replaceNode(node: TypedNode, allASTs: TypedNode[], selectFileIndex: number) {
-  let targets = new Set<string>();
-  let declarationStmt = <ts.VariableDeclaration>node.node.compilerNode
-  let targetType: string;
+export class ArgTarget {
+  private _arg: morph.Node;
+  private _targets: string[];
 
-  if (declarationStmt.type) {
-    targetType = declarationStmt.type?.getText()
-  } else {
-    let checker = node.node.getProject().getProgram().getTypeChecker().compilerObject
-    targetType = checker.typeToString(checker.getTypeAtLocation(declarationStmt.initializer))
+  constructor(arg: morph.Node, targets: string[]) {
+    this._arg = arg;
+    this.targets = targets
   }
 
-  let selectNode = declarationStmt.initializer;
+  public get arg(): morph.Node {
+    return this._arg;
+  }
+  public set arg(value: morph.Node) {
+    this._arg = value;
+  }
+
+  public get targets(): string[] {
+    return this._targets;
+  }
+  public set targets(value: string[]) {
+    this._targets = value;
+  }
+}
+
+//根据变量的类型进行替换
+function replaceVariable(node: TypedNode, allASTs: TypedNode[]) {
+  let targets = new Set<string>();
+  let declarationStmt = <morph.VariableDeclaration>node.node
+  let targetType: string;
+
+  if (declarationStmt.getType()) {
+    targetType = declarationStmt.getType().getText()
+  } else {
+    let checker = node.node.getProject().getProgram().getTypeChecker().compilerObject
+    targetType = checker.typeToString(checker.getTypeAtLocation(declarationStmt.getInitializer().compilerNode))
+  } 
+
+  let selectNode = declarationStmt.getInitializer();
   // 在目标节点中添加 1.自己文件中类型匹配的变量或常量 2.其他文件中的常量
   for (let i in allASTs) {
     if (targetType == "any") {
@@ -152,18 +183,18 @@ function replaceNode(node: TypedNode, allASTs: TypedNode[], selectFileIndex: num
         }
       }
     }
-
-    if (Number(i) == selectFileIndex) {
-      for (let variable of allASTs[i].variables) {
-        if (variable.variableType === targetType) {
-          targets.add(variable.variableName)
-        }
-      }
-    }
   }
 
-  targets.delete(declarationStmt.name.getText())
-  targets.delete(declarationStmt.initializer.getText())
+  node.variables.forEach(function (variable) {
+    if (targetType == "any") {
+      targets.add(variable.variableName)
+    } else if (variable.variableType === targetType) {
+      targets.add(variable.variableName)
+    }
+  })
+
+  targets.delete(declarationStmt.getName())
+  targets.delete(declarationStmt.getInitializer().getText())
 
   console.log("select node:" + selectNode.getText(), targetType);
   process.stdout.write("target node: ")
@@ -176,10 +207,54 @@ function replaceNode(node: TypedNode, allASTs: TypedNode[], selectFileIndex: num
     // node.node.getSourceFile().replaceText([selectNode.getStart(), selectNode.getEnd()], replaceText);
     // console.log(selectNode.getStart(), selectNode.getEnd());
     console.log("\nAfter mutate: " + replaceRange(selectNode.getSourceFile().getFullText(), selectNode.getStart(), selectNode.getEnd(), replaceText));
-
   }
 }
 
+
+
+//替换调用语句
+function replaceCallExp(node: TypedNode, allASTs: TypedNode[]) {
+  let argTargetPairs: ArgTarget[] = [];
+  let callExp = <morph.CallExpression>node.node
+  let args: morph.Node[] = callExp.getArguments();
+  for (let arg of args) {
+    let targets = new Set<string>()
+
+    for (let i = 0; i < allASTs.length; i++) {
+      for (let literal of allASTs[i].literals) {
+        if (arg.getType().getText().toLowerCase() === "any") {
+          targets.add(literal.literalValue)
+        } else if (arg.getType().getText().toLowerCase() === literal.literalType) {
+          targets.add(literal.literalValue)
+        }
+      }
+
+      node.variables.forEach(function (variable) {
+        if (arg.getType().getText().toLowerCase() === "any") {
+          targets.add(variable.variableName)
+        } else if (variable.variableType === arg.getType().getText().toLowerCase()) {
+          targets.add(variable.variableName)
+        }
+      })
+    }
+    argTargetPairs.push(new ArgTarget(arg, Array.from(targets)))
+  }
+
+
+  if (argTargetPairs.length >= 1) {
+    for (let argTargetPair of argTargetPairs) {
+      if (Math.random() > 0.5) {
+        let selectArg = argTargetPair.arg
+        console.log("select node:" + selectArg.getText());
+        let replaceText = argTargetPair.targets[randomNum(0, argTargetPair.targets.length - 1)]
+        process.stdout.write("target node: ")
+        argTargetPair.targets.forEach(target => process.stdout.write(target + " "))
+        console.log("\nreplace", selectArg.getText(), "to", replaceText);
+        console.log("\nAfter mutate: " + replaceRange(node.node.getSourceFile().getFullText(), selectArg.getStart(), selectArg.getEnd(), replaceText));
+      }
+    }
+  }
+}
 
 function walkByType(node: TypedNode, type: string, targets: Set<string>) {
   for (let variable of node.variables) {
@@ -207,9 +282,11 @@ function selectLiteral(nodes: morph.Node[]): morph.Node | void {
   }
 }
 
-function selectCandidateNodes(node: TypedNode, candidateNode: TypedNodeSet<TypedNode>) {
-  // 增加变量声明语句到候选中
-  if (node.node.getKind() == ts.SyntaxKind.VariableDeclaration) {
+function selectCandidateNodes(node: TypedNode, candidateNode: MySet<TypedNode>) {
+  // 增加变量声明语句和函数调用语句到候选中
+  if (node.node.getKind() === ts.SyntaxKind.VariableDeclaration) {
+    candidateNode.add(node)
+  } else if (node.node.getKind() === ts.SyntaxKind.CallExpression) {
     candidateNode.add(node)
   }
 
@@ -217,11 +294,12 @@ function selectCandidateNodes(node: TypedNode, candidateNode: TypedNodeSet<Typed
   return candidateNode
 }
 
-// 自底向上的将所有的literal汇总至根节点中
-function updateLiterals(node: TypedNode) {
-  node.children.forEach(child => updateLiterals(child))
+// 自底向上的将所有的literal和function汇总至根节点中
+function updateLiteralsAndFunctions(node: TypedNode) {
+  node.children.forEach(child => updateLiteralsAndFunctions(child))
 
   node.literals.forEach(literal => node.parent?.literals.add(literal))
+  node.functions.forEach(func => node.parent?.functions.add(func))
 }
 
 // 选择具有指定类型的节点
@@ -248,7 +326,7 @@ for (let sourceFile of project.getSourceFiles()) {
     setParentTypeNode(root);
     initVariables(root);
     updateVariables(root);
-    updateLiterals(root);
+    updateLiteralsAndFunctions(root);
     // console.log("variables value ---------------");
     // root.variables.forEach(variable => console.log(variable.variableName, Type[variable.variableType]))
     // console.log("literals value ---------------");
@@ -258,24 +336,29 @@ for (let sourceFile of project.getSourceFiles()) {
 }
 
 // 突变10次
-for (let i = 0; i < 10; i++) {
+for (let i = 0; i < 50; i++) {
   //随机选择一个树
   let index = randomNum(0, allASTs.length - 1)
   let selectTree = allASTs[index]
   console.log("\nBefore mutate: \"" + selectTree.node.getText() + "\"");
   //随机选择一个节点
-  let candidateNodes: TypedNodeSet<TypedNode> = new TypedNodeSet<TypedNode>();
+  let candidateNodes: MySet<TypedNode> = new MySet<TypedNode>();
   selectCandidateNodes(selectTree, candidateNodes)
   let candidateNodesArray = Array.from(candidateNodes)
   let selectNode = candidateNodesArray[randomNum(0, candidateNodesArray.length - 1)];
-  if (selectNode) {
-    // 替换选择的节点
-    // replaceNodeWithKind(selectTree.node.getSourceFile(), selectNode, index);
-    replaceNode(selectNode, allASTs, index)
-    // 打印突变之后的代码
-    // console.log("\nAfter mutate: \"" + selectTree.node.getText() + "\"");
-    console.log("------------");
-    // 将突变之后的代码写入文件中
-    // fs.writeFileSync("D:/PyCharm 2021.2.1/code/result/mutate_file_" + i + ".ts", selectFile.getText())
+  if (selectNode?.node.getKind() === ts.SyntaxKind.VariableDeclaration) {
+    replaceVariable(selectNode, allASTs)
+  } else if (selectNode?.node.getKind() === ts.SyntaxKind.CallExpression) {
+    replaceCallExp(selectNode, allASTs)
   }
+  // if (selectNode) {
+  // 替换选择的节点
+  // replaceNodeWithKind(selectTree.node.getSourceFile(), selectNode, index);
+
+  // 打印突变之后的代码
+  // console.log("\nAfter mutate: \"" + selectTree.node.getText() + "\"");
+
+  // 将突变之后的代码写入文件中
+  // fs.writeFileSync("D:/PyCharm 2021.2.1/code/result/mutate_file_" + i + ".ts", selectFile.getText())
+  // }
 }

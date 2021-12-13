@@ -1,17 +1,12 @@
-let aa: number = 1;
-let ab = ["2", "3"];
-let ac = [3, 4];
-let ad: boolean = false;
-let ae: any = 1;
-let af = ac[aa]
-aa = 2
-// var sourceCode = `
-// let cc:number[] = [7, 8, 9];
-// let ccc: number = cc[0];
-// let cccc: number = 1;
-// let ccccc: string = "1";
-// `.trim();
-// console.log("before mutate: " + sourceCode);
+let a = "hello world"
+let b = "hello world"
+let c = "hello world"
+let d = "hello world"
+let e = "hello world"
 
-// const project = new Project();
-// project.createSourceFile("/test.ts", sourceCode);
+function print(s: string, a?: number): string {
+    console.log(s)
+    return s
+}
+
+print(a)
