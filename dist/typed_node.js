@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LiteralSet = exports.VariableSet = exports.TypedNodeSet = exports.strToType = exports.Type = exports.LiteralType = exports.VariableType = exports.LiteralNameFactory = exports.FunctionType = exports.TypedNode = void 0;
+exports.LiteralSet = exports.VariableSet = exports.TypedNodeSet = exports.LiteralType = exports.VariableType = exports.LiteralNameFactory = exports.FunctionType = exports.TypedNode = void 0;
 class TypedNode {
     constructor(node, children, type, parent) {
         this._variables = new VariableSet();
@@ -144,35 +144,6 @@ class LiteralType {
     }
 }
 exports.LiteralType = LiteralType;
-var Type;
-(function (Type) {
-    Type[Type["Number"] = 0] = "Number";
-    Type[Type["Boolean"] = 1] = "Boolean";
-    Type[Type["String"] = 2] = "String";
-    Type[Type["Array"] = 3] = "Array";
-    Type[Type["Any"] = 4] = "Any";
-    Type[Type["Function"] = 5] = "Function";
-    Type[Type["Object"] = 6] = "Object";
-    Type[Type["Union"] = 7] = "Union";
-    Type[Type["Interface"] = 8] = "Interface";
-    Type[Type["Undefined"] = 9] = "Undefined";
-    Type[Type["Enum"] = 10] = "Enum";
-})(Type = exports.Type || (exports.Type = {}));
-function strToType(stype) {
-    for (let type in Type) {
-        if (typeof Type[type] === "string") {
-            if (Type[type].toLowerCase() === stype) {
-                return Type[Type[type]];
-            }
-            else if ((stype === null || stype === void 0 ? void 0 : stype.search("Array")) != -1) {
-                console.log(Type[type]);
-                return Type.Array;
-            }
-        }
-    }
-    return Type.Undefined;
-}
-exports.strToType = strToType;
 class TypedNodeSet extends Set {
     add(value) {
         let found = false;

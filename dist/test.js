@@ -22,15 +22,14 @@ function walk(node) {
         console.log(variable.getSymbol().getName());
         console.log(checker.getTypeText(type));
         console.log("----------------");
-    }
-    else if (node.getKind() == ts.SyntaxKind.ExpressionStatement) {
-        console.log(node.getKindName(), node.getText());
-        let stmt = node;
-        stmt.getDescendants().forEach(n => { var _a; return console.log((_a = checker.getTypeAtLocation(n)) === null || _a === void 0 ? void 0 : _a.getText(), n.getText(), n.getKindName()); });
-        // let type: morph.Type = checker.getTypeOfSymbolAtLocation(variable.getSymbol(), node)
-        // console.log(variable.getSymbol().getName());
-        // console.log(checker.getTypeText(type))
-    }
+    } //else if(node.getKind() == ts.SyntaxKind.ExpressionStatement) {
+    // console.log(node.getKindName(), node.getText());
+    // let stmt: morph.ExpressionStatement = <morph.ExpressionStatement>node;
+    // stmt.getDescendants().forEach(n => console.log(checker.getTypeAtLocation(n)?.getText(), n.getText(), n.getKindName()));
+    // let type: morph.Type = checker.getTypeOfSymbolAtLocation(variable.getSymbol(), node)
+    // console.log(variable.getSymbol().getName());
+    // console.log(checker.getTypeText(type))
+    // }
     node.forEachChild(child => walk(child));
 }
 walk(sourceFile);

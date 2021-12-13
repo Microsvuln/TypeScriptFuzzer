@@ -19,10 +19,10 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const ts_morph_1 = require("ts-morph");
+const morph = __importStar(require("ts-morph"));
 const ts = __importStar(require("typescript"));
 const typed_node_1 = require("./typed_node");
-const project = new ts_morph_1.Project();
+const project = new morph.Project();
 // 添加文件
 project.addSourceFilesAtPaths("D:/PyCharm 2021.2.1/code/test/*.ts");
 let literalNameFactory = new typed_node_1.LiteralNameFactory();
@@ -49,7 +49,7 @@ function inferTypedNode(node) {
     }
     switch (node.node.getKindName()) {
         case "NumberKeyword": {
-            findIdentifier(node, typed_node_1.Type.Number);
+            findIdentifier(node, "number");
         }
     }
 }
@@ -74,33 +74,18 @@ function initVariables(node) {
         let checker = node.node.getProject().getProgram().getTypeChecker();
         let symbol = node.node.getSymbol();
         let type = checker.getTypeOfSymbolAtLocation(symbol, node.node);
-        node.variables.add(new typed_node_1.VariableType(symbol.getName(), (0, typed_node_1.strToType)(type.getText())));
+        node.variables.add(new typed_node_1.VariableType(symbol.getName(), type.getText().toLowerCase()));
     }
     else if (node.node.getKindName().search("Literal") != -1) {
-        switch (node.node.getKind()) {
-            case ts.SyntaxKind.NumericLiteral: {
-                node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Number, node.node.getText(), literalNameFactory));
-                break;
-            }
-            case ts.SyntaxKind.StringLiteral: {
-                node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.String, node.node.getText(), literalNameFactory));
-                break;
-            }
-            case ts.SyntaxKind.BigIntLiteral: {
-                node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Number, node.node.getText(), literalNameFactory));
-                break;
-            }
-            case ts.SyntaxKind.ArrayLiteralExpression: {
-                node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Array, node.node.getText(), literalNameFactory));
-                break;
-            }
-        }
+        let checker = node.node.getProject().getProgram().getTypeChecker();
+        let type = checker.getBaseTypeOfLiteralType(node.node.getType()).getText();
+        node.literals.add(new typed_node_1.LiteralType(type.toLowerCase(), node.node.getText(), literalNameFactory));
     }
-    else if (node.node.getKindName().search("FalseKeyword")) {
-        node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Boolean, false, literalNameFactory));
+    else if (node.node.getKindName().search("FalseKeyword") != -1) {
+        node.literals.add(new typed_node_1.LiteralType("boolean", false, literalNameFactory));
     }
-    else if (node.node.getKindName().search("TrueKeyword")) {
-        node.literals.add(new typed_node_1.LiteralType(typed_node_1.Type.Boolean, true, literalNameFactory));
+    else if (node.node.getKindName().search("TrueKeyword") != -1) {
+        node.literals.add(new typed_node_1.LiteralType("boolean", true, literalNameFactory));
     }
     node.children.forEach(child => initVariables(child));
 }
@@ -140,20 +125,6 @@ function randomNum(min, max) {
     let rand = Math.random();
     return (min + Math.round(rand * range));
 }
-function replaceNodeWithKind(selectFile, selectNode, selectFileIndex) {
-    let targetNodes = [];
-    for (let i in project.getSourceFiles()) {
-        if (Number(i) != selectFileIndex) {
-            walkASTWithKind(project.getSourceFiles()[i], selectNode.getKind(), targetNodes);
-        }
-    }
-    targetNodes.forEach(node => process.stdout.write(node.getText().trim() + " "));
-    if (targetNodes.length >= 1) {
-        let replaceNode = targetNodes[randomNum(0, targetNodes.length - 1)];
-        console.log("replace", selectNode.getText(), "to", replaceNode.getText());
-        selectFile.replaceText([selectNode.getStart(), selectNode.getEnd()], replaceNode.getText());
-    }
-}
 function replaceRange(s, start, end, substitute) {
     return s.substring(0, start) + substitute + s.substring(end);
 }
@@ -161,26 +132,44 @@ function replaceNode(node, allASTs, selectFileIndex) {
     var _a;
     let targets = new Set();
     let declarationStmt = node.node.compilerNode;
-    let targetType = (0, typed_node_1.strToType)((_a = declarationStmt.type) === null || _a === void 0 ? void 0 : _a.getText());
+    let targetType;
+    if (declarationStmt.type) {
+        targetType = (_a = declarationStmt.type) === null || _a === void 0 ? void 0 : _a.getText();
+    }
+    else {
+        let checker = node.node.getProject().getProgram().getTypeChecker().compilerObject;
+        targetType = checker.typeToString(checker.getTypeAtLocation(declarationStmt.initializer));
+    }
     let selectNode = declarationStmt.initializer;
     // 在目标节点中添加 1.自己文件中类型匹配的变量或常量 2.其他文件中的常量
     for (let i in allASTs) {
-        for (let literal of allASTs[i].literals) {
-            if (literal.literalType === targetType) {
-                targets.add(literal.literalValue);
+        if (targetType == "any") {
+            allASTs[i].literals.forEach(literal => targets.add(literal.literalValue));
+        }
+        else {
+            for (let literal of allASTs[i].literals) {
+                if (literal.literalType === targetType) {
+                    targets.add(literal.literalValue);
+                }
             }
         }
         if (Number(i) == selectFileIndex) {
-            walkByType(allASTs[i], targetType, targets);
+            for (let variable of allASTs[i].variables) {
+                if (variable.variableType === targetType) {
+                    targets.add(variable.variableName);
+                }
+            }
         }
     }
-    console.log(declarationStmt.name.getText());
     targets.delete(declarationStmt.name.getText());
+    targets.delete(declarationStmt.initializer.getText());
+    console.log("select node:" + selectNode.getText(), targetType);
+    process.stdout.write("target node: ");
     targets.forEach(target => process.stdout.write(target + " "));
     if (targets.size >= 1) {
         let targetsArray = Array.from(targets);
-        let replaceText = targetsArray[randomNum(0, targetsArray.length)];
-        console.log("replace", selectNode.getText(), "to", replaceText);
+        let replaceText = targetsArray[randomNum(0, targetsArray.length - 1)];
+        console.log("\nreplace", selectNode.getText(), "to", replaceText);
         // node.node.getSourceFile().replaceText([selectNode.getStart(), selectNode.getEnd()], replaceText);
         // console.log(selectNode.getStart(), selectNode.getEnd());
         console.log("\nAfter mutate: " + replaceRange(selectNode.getSourceFile().getFullText(), selectNode.getStart(), selectNode.getEnd(), replaceText));

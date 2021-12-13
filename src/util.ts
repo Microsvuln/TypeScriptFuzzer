@@ -1,14 +1,14 @@
-import { Project, SourceFile, Node, TypeNode, VariableDeclaration, TypeChecker, Statement } from 'ts-morph'
+import * as morph from 'ts-morph'
 import * as ts from "typescript"
-import { TypedNode, FunctionType, VariableType, Type, TypedNodeSet, VariableSet, strToType, LiteralNameFactory, LiteralType } from "./typed_node"
+import { TypedNode, FunctionType, VariableType, TypedNodeSet, VariableSet, LiteralNameFactory, LiteralType } from "./typed_node"
 
-const project = new Project();
+const project = new morph.Project();
 // 添加文件
 project.addSourceFilesAtPaths("D:/PyCharm 2021.2.1/code/test/*.ts")
 let literalNameFactory = new LiteralNameFactory()
 
 // 自底向上构建类型树
-function creatTypedNode(node: Node, parent?: TypedNode): TypedNode {
+function creatTypedNode(node: morph.Node, parent?: TypedNode): TypedNode {
   let children: TypedNode[] = [];
 
   for (let child of node.getChildren()) {
@@ -35,7 +35,7 @@ function inferTypedNode(node: TypedNode) {
 
   switch (node.node.getKindName()) {
     case "NumberKeyword": {
-      findIdentifier(node, Type.Number);
+      findIdentifier(node, "number");
     }
   }
 }
@@ -64,30 +64,15 @@ function initVariables(node: TypedNode) {
     let checker = node.node.getProject().getProgram().getTypeChecker()
     let symbol = node.node.getSymbol()
     let type = checker.getTypeOfSymbolAtLocation(symbol, node.node)
-    node.variables.add(new VariableType(symbol.getName(), strToType(type.getText())))
+    node.variables.add(new VariableType(symbol.getName(), type.getText().toLowerCase()))
   } else if (node.node.getKindName().search("Literal") != -1) {
-    switch (node.node.getKind()) {
-      case ts.SyntaxKind.NumericLiteral: {
-        node.literals.add(new LiteralType(Type.Number, node.node.getText(), literalNameFactory))
-        break;
-      }
-      case ts.SyntaxKind.StringLiteral: {
-        node.literals.add(new LiteralType(Type.String, node.node.getText(), literalNameFactory))
-        break;
-      }
-      case ts.SyntaxKind.BigIntLiteral: {
-        node.literals.add(new LiteralType(Type.Number, node.node.getText(), literalNameFactory))
-        break;
-      }
-      case ts.SyntaxKind.ArrayLiteralExpression: {
-        node.literals.add(new LiteralType(Type.Array, node.node.getText(), literalNameFactory))
-        break;
-      }
-    }
-  } else if (node.node.getKindName().search("FalseKeyword")) {
-    node.literals.add(new LiteralType(Type.Boolean, false, literalNameFactory))
-  } else if (node.node.getKindName().search("TrueKeyword")) {
-    node.literals.add(new LiteralType(Type.Boolean, true, literalNameFactory))
+    let checker = node.node.getProject().getProgram().getTypeChecker();
+    let type: string = checker.getBaseTypeOfLiteralType(node.node.getType()).getText()
+    node.literals.add(new LiteralType(type.toLowerCase(), node.node.getText(), literalNameFactory))
+  } else if (node.node.getKindName().search("FalseKeyword") != -1) {
+    node.literals.add(new LiteralType("boolean", false, literalNameFactory))
+  } else if (node.node.getKindName().search("TrueKeyword") != -1) {
+    node.literals.add(new LiteralType("boolean", true, literalNameFactory))
   }
 
   node.children.forEach(child => initVariables(child))
@@ -96,7 +81,7 @@ function initVariables(node: TypedNode) {
 
 
 // 根据声明标识符和类型信息寻找到具体标识符，并加入到变量集合当中
-function findIdentifier(node: TypedNode, type: Type) {
+function findIdentifier(node: TypedNode, type: string) {
   if (!node.parent) return;
 
 
@@ -124,7 +109,7 @@ function walkTypedNode(node: TypedNode, depth = 0) {
   }
 }
 
-function walkAST(node: Node, depth = 0) {
+function walkAST(node: morph.Node, depth = 0) {
   console.log(new Array(depth + 1).join('----'), ts.SyntaxKind[node.getKind()], node.getStart(), node.getEnd(), node.getText());
   depth++;
   for (let child of node.getChildren()) {
@@ -138,22 +123,6 @@ function randomNum(min: number, max: number): number {
   return (min + Math.round(rand * range))
 }
 
-function replaceNodeWithKind(selectFile: SourceFile, selectNode: Node, selectFileIndex: number) {
-  let targetNodes: Node[] = []
-  for (let i in project.getSourceFiles()) {
-    if (Number(i) != selectFileIndex) {
-      walkASTWithKind(project.getSourceFiles()[i], selectNode.getKind(), targetNodes)
-    }
-  }
-
-  targetNodes.forEach(node => process.stdout.write(node.getText().trim() + " "))
-
-  if (targetNodes.length >= 1) {
-    let replaceNode: Node = targetNodes[randomNum(0, targetNodes.length - 1)];
-    console.log("replace", selectNode.getText(), "to", replaceNode.getText());
-    selectFile.replaceText([selectNode.getStart(), selectNode.getEnd()], replaceNode.getText());
-  }
-}
 
 function replaceRange(s: string, start: number, end: number, substitute: string) {
   return s.substring(0, start) + substitute + s.substring(end);
@@ -162,29 +131,48 @@ function replaceRange(s: string, start: number, end: number, substitute: string)
 function replaceNode(node: TypedNode, allASTs: TypedNode[], selectFileIndex: number) {
   let targets = new Set<string>();
   let declarationStmt = <ts.VariableDeclaration>node.node.compilerNode
-  let targetType = strToType(declarationStmt.type?.getText())
+  let targetType: string;
+
+  if (declarationStmt.type) {
+    targetType = declarationStmt.type?.getText()
+  } else {
+    let checker = node.node.getProject().getProgram().getTypeChecker().compilerObject
+    targetType = checker.typeToString(checker.getTypeAtLocation(declarationStmt.initializer))
+  }
+
   let selectNode = declarationStmt.initializer;
   // 在目标节点中添加 1.自己文件中类型匹配的变量或常量 2.其他文件中的常量
   for (let i in allASTs) {
-    for (let literal of allASTs[i].literals) {
-      if (literal.literalType === targetType) {
-        targets.add(literal.literalValue)
+    if (targetType == "any") {
+      allASTs[i].literals.forEach(literal => targets.add(literal.literalValue))
+    } else {
+      for (let literal of allASTs[i].literals) {
+        if (literal.literalType === targetType) {
+          targets.add(literal.literalValue)
+        }
       }
     }
 
     if (Number(i) == selectFileIndex) {
-      walkByType(allASTs[i], targetType, targets)
+      for (let variable of allASTs[i].variables) {
+        if (variable.variableType === targetType) {
+          targets.add(variable.variableName)
+        }
+      }
     }
   }
-  console.log(declarationStmt.name.getText());
-  
+
   targets.delete(declarationStmt.name.getText())
+  targets.delete(declarationStmt.initializer.getText())
+
+  console.log("select node:" + selectNode.getText(), targetType);
+  process.stdout.write("target node: ")
   targets.forEach(target => process.stdout.write(target + " "))
 
   if (targets.size >= 1) {
     let targetsArray = Array.from(targets)
-    let replaceText = targetsArray[randomNum(0, targetsArray.length)]
-    console.log("replace", selectNode.getText(), "to", replaceText);
+    let replaceText = targetsArray[randomNum(0, targetsArray.length - 1)]
+    console.log("\nreplace", selectNode.getText(), "to", replaceText);
     // node.node.getSourceFile().replaceText([selectNode.getStart(), selectNode.getEnd()], replaceText);
     // console.log(selectNode.getStart(), selectNode.getEnd());
     console.log("\nAfter mutate: " + replaceRange(selectNode.getSourceFile().getFullText(), selectNode.getStart(), selectNode.getEnd(), replaceText));
@@ -193,7 +181,7 @@ function replaceNode(node: TypedNode, allASTs: TypedNode[], selectFileIndex: num
 }
 
 
-function walkByType(node: TypedNode, type: Type, targets: Set<string>) {
+function walkByType(node: TypedNode, type: string, targets: Set<string>) {
   for (let variable of node.variables) {
     if (variable.variableType === type) {
       targets.add(variable.variableName)
@@ -203,8 +191,8 @@ function walkByType(node: TypedNode, type: Type, targets: Set<string>) {
   node.children.forEach(child => walkByType(child, type, targets))
 }
 
-function selectLiteral(nodes: Node[]): Node | void {
-  let candidateNodes: Node[] = []
+function selectLiteral(nodes: morph.Node[]): morph.Node | void {
+  let candidateNodes: morph.Node[] = []
   for (let node in nodes) {
     if (nodes[node].getKindName().search("Literal") != -1) {
       candidateNodes.push(nodes[node])
@@ -237,7 +225,7 @@ function updateLiterals(node: TypedNode) {
 }
 
 // 选择具有指定类型的节点
-function walkASTWithKind(node: Node, kind: number, replaceNodes: Node[]) {
+function walkASTWithKind(node: morph.Node, kind: number, replaceNodes: morph.Node[]) {
   // console.log("find type " + node.getKindName());
   // console.log("require type " + kindName);
   if (node.compilerNode.kind == kind) {

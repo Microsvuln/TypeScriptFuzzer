@@ -1,6 +1,6 @@
 "use strict";
 let aa = 1;
-let ab = "2";
+let ab = ["2", "3"];
 let ac = [3, 4];
 let ad = false;
 let ae = 1;

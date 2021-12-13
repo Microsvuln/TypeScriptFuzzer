@@ -1,4 +1,5 @@
 
+import exp from 'constants';
 import { Project, SourceFile, Node } from 'ts-morph'
 import * as ts from "typescript"
 
@@ -119,12 +120,12 @@ export class LiteralNameFactory {
 
 export class VariableType {
     private _variableName: string;
-    private _variableType: Type;
+    private _variableType: string;
 
-    public get variableType(): Type {
+    public get variableType(): string {
         return this._variableType;
     }
-    public set variableType(value: Type) {
+    public set variableType(value: string) {
         this._variableType = value;
     }
     public get variableName(): string {
@@ -134,7 +135,7 @@ export class VariableType {
         this._variableName = value;
     }
 
-    constructor(variableName: string, variableType: Type) {
+    constructor(variableName: string, variableType: string) {
         this._variableName = variableName;
         this._variableType = variableType;
     }
@@ -146,13 +147,13 @@ export class VariableType {
 
 export class LiteralType {
     private _literalName: string;
-    private _literalType: Type;
+    private _literalType: string;
     private _literalValue: any;
 
-    public get literalType(): Type {
+    public get literalType(): string {
         return this._literalType;
     }
-    public set literalType(value: Type) {
+    public set literalType(value: string) {
         this._literalType = value;
     }
     public get literalName(): string {
@@ -162,7 +163,7 @@ export class LiteralType {
         this._literalName = value;
     }
 
-    constructor(literalType: Type, literalValue: any, literalNameFactory: LiteralNameFactory) {
+    constructor(literalType: string, literalValue: any, literalNameFactory: LiteralNameFactory) {
         this._literalName = literalNameFactory.getLiteralName()
         this._literalType = literalType;
         this.literalValue = literalValue;
@@ -180,34 +181,46 @@ export class LiteralType {
     }
 }
 
-export enum Type {
-    Number,
-    Boolean,
-    String,
-    Array,
-    Any,
-    Function,
-    Object,
-    Union,
-    Interface,
-    Undefined,
-    Enum
-}
 
-export function strToType(stype: string): Type {
-    for (let type in Type) {
-        if (typeof Type[type] === "string") {
-            if (Type[type].toLowerCase() === stype) {
-                return (<any>Type)[Type[type]];
-            } else if (stype?.search("Array") != -1) {
-                console.log(Type[type]);
-                return Type.Array
-            }
-        }
-    }
+// export enum Type {
+//     Number,
+//     Boolean,
+//     String,
+//     Any,
+//     Function,
+//     Object,
+//     Union,
+//     Interface,
+//     Undefined,
+//     Enum,
+//     NumberArray,
+//     BooleanArray,
+//     StringArray,
+//     ArrayArray,
+//     AnyArray,
+//     FunctionArray,
+//     ObjectArray,
+//     UnionArray,
+//     InterfaceArray,
+//     EnumArray
+// }
 
-    return Type.Undefined;
-}
+// TODO 对数组类型进一步处理
+// export function strToType(stype: string): Type {
+//     for (let type in Type) {
+//         if (typeof Type[type] === "string") {
+//             if (Type[type].toLowerCase() === stype) {
+//                 return (<any>Type)[Type[type]];
+//             } else if (stype?.search(/\[\]/g) != -1) {
+//                 return Type.Array
+//             } else if(stype.search("false") != -1 || stype.search("true") != -1) {
+//                 return Type.Boolean
+//             }
+//         }
+//     }
+
+//     return Type.Undefined;
+// }
 
 interface Compareable {
     equals(other: Compareable): boolean;
